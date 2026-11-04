@@ -27,6 +27,8 @@ h2{font-size:17px;margin:0 0 15px}
 .btn:hover{background:var(--deep)}
 .btn.light{background:#eee9f8;color:#56399e}
 .btn.danger{background:#fde8e8;color:#b42318}
+.btn.green{background:#1f8a5b}
+.btn.green:hover{background:#17724b}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .field{padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);max-width:100%}
 .notice{padding:11px 13px;border-radius:9px;background:#f3effb;color:#5e478e;font-size:12px;line-height:1.55}
@@ -59,6 +61,14 @@ h2{font-size:17px;margin:0 0 15px}
 .savebar .btn{font-size:12px;padding:8px 11px}
 #saveState{font-size:12px;color:#256b43;font-weight:600;margin-right:auto}
 #saveState.warn{color:#b42318}
+.autobar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 14px;padding:12px 13px;border-radius:10px;background:#fff8e8;border:1px solid #f1deb0}
+.autobar .btn{font-size:13px}
+#autoInfo{font-size:12px;color:#7a5a00;font-weight:600}
+.progress{flex:1;min-width:140px;height:8px;background:#f1e6c4;border-radius:8px;overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:#e0a100;transition:width .2s}
+.catrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.catrow select{min-width:200px;font-weight:700}
+.catrow .btn{font-size:12px;padding:9px 11px}
 @media(max-width:600px){.hero{align-items:flex-start;flex-direction:column}.hero h1{font-size:24px}.stats{gap:6px}.stat{padding:10px}.stat b{font-size:18px}}
 </style>
 </head>
@@ -68,14 +78,26 @@ h2{font-size:17px;margin:0 0 15px}
 <div class="hero">
 <div>
 <h1>Trouvez les images de vos produits</h1>
-<p>Importez votre fichier Excel, vérifiez les images et exportez votre catalogue.</p>
+<p>Une catégorie = un travail sauvegardé. Les images sont trouvées automatiquement, vous pouvez toujours les changer.</p>
 </div>
-<div class="version">VERSION 1.1</div>
+<div class="version">VERSION 1.2</div>
 </div>
 </header>
 <main>
+
 <section class="panel">
-<h2>01 — Importer votre fichier Excel</h2>
+<h2>00 — Catégorie de travail</h2>
+<div class="catrow">
+<select id="catSel" class="field"></select>
+<button id="catNew" class="btn">➕ Nouvelle catégorie</button>
+<button id="catRename" class="btn light">✏️ Renommer</button>
+<button id="catDel" class="btn danger">🗑️ Supprimer</button>
+</div>
+<div class="muted" style="margin-top:10px">Chaque catégorie garde ses propres produits et ses propres images. Changez de catégorie à tout moment : rien n’est perdu.</div>
+</section>
+
+<section class="panel">
+<h2>01 — Importer un fichier Excel dans la catégorie « <span id="catName"></span> »</h2>
 <label class="upload" for="file">
 <div style="font-size:32px">📄</div>
 <strong>Choisir un fichier Excel</strong>
@@ -95,19 +117,29 @@ h2{font-size:17px;margin:0 0 15px}
 <input id="backupFile" type="file" accept=".json,application/json" class="hidden">
 </div>
 </section>
+
 <section id="workspace" class="panel hidden">
 <div class="toolbar">
-<h2>02 — Catalogue des produits</h2>
+<h2>02 — Catalogue : <span id="catName2"></span></h2>
 <div class="row" style="margin:0">
 <input id="filter" class="field" placeholder="Rechercher un produit…">
-<button id="export" class="btn" disabled>↓ Exporter Excel</button>
+<button id="export" class="btn" disabled>↓ Exporter cette catégorie</button>
+<button id="exportAll" class="btn light" disabled>↓ Exporter toutes les catégories</button>
 </div>
 </div>
+
 <div class="savebar">
 <span id="saveState">Sauvegarde automatique activée</span>
 <button id="backupBtn" class="btn light">💾 Télécharger la sauvegarde (.json)</button>
-<button id="clearBtn" class="btn danger">🗑️ Tout effacer</button>
+<button id="clearBtn" class="btn danger">🗑️ Vider cette catégorie</button>
 </div>
+
+<div class="autobar">
+<button id="autoBtn" class="btn green">⚡ Recherche automatique des images</button>
+<span id="autoInfo">Trouve et choisit une image pour tous les produits sans image. Vous pourrez la changer ensuite.</span>
+<div class="progress hidden" id="progWrap"><i id="prog"></i></div>
+</div>
+
 <div class="stats">
 <div class="stat"><b id="total">0</b><span>Produits importés</span></div>
 <div class="stat"><b id="found">0</b><span>Images sélectionnées</span></div>
@@ -119,19 +151,29 @@ h2{font-size:17px;margin:0 0 15px}
 <div class="footer">Product Image Finder · Vérifiez les droits d’utilisation des images avant toute publication commerciale.</div>
 </main>
 <script>
-let sourceRows=[],products=[],fileName='';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const STORE_KEY='product_image_finder_v1';
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const STORE_KEY='product_image_finder_v2';
+const OLD_KEY='product_image_finder_v1';
+
+let sourceRows=[];
+let DB={current:'Général',cats:{'Général':{fileName:'',products:[]}}};
+let products=[];      /* produits de la catégorie courante */
+let auto=false;       /* recherche automatique en cours */
+
+const cur=()=>DB.cats[DB.current];
+function useCurrent(){products=cur().products;}
 
 /* ---------- SAUVEGARDE ---------- */
 function snapshot(){
-return{app:'product-image-finder',version:1,savedAt:new Date().toISOString(),fileName,
-products:products.map(p=>({id:p.id,name:p.name,price:p.price,image:p.image,source:p.source,link:p.link}))};
+const cats={};
+for(const [name,c] of Object.entries(DB.cats)){
+cats[name]={fileName:c.fileName||'',products:c.products.map(p=>({id:p.id,name:p.name,price:p.price,image:p.image,source:p.source,link:p.link}))};
 }
-function setSaveState(msg,warn){
-const el=$('saveState');el.textContent=msg;el.classList.toggle('warn',!!warn);
+return{app:'product-image-finder',version:2,savedAt:new Date().toISOString(),current:DB.current,cats};
 }
+function setSaveState(msg,warn){const el=$('saveState');el.textContent=msg;el.classList.toggle('warn',!!warn);}
 function save(){
 try{
 localStorage.setItem(STORE_KEY,JSON.stringify(snapshot()));
@@ -140,25 +182,84 @@ setSaveState('✓ Sauvegardé automatiquement à '+new Date().toLocaleTimeString
 setSaveState('⚠️ Sauvegarde automatique impossible — téléchargez la sauvegarde .json',true);
 }
 }
-function applyData(d){
-products=d.products.map((p,i)=>({id:i,name:String(p.name??''),price:p.price??'',image:p.image||'',source:p.source||'',link:p.link||'',candidates:[]}));
-fileName=d.fileName||'';
-$('workspace').classList.remove('hidden');
-render();
+function normProducts(list){
+return (list||[]).map((p,i)=>({id:i,name:String(p.name??''),price:p.price??'',image:p.image||'',source:p.source||'',link:p.link||'',candidates:[]}));
+}
+/* accepte l'ancien format (v1: un seul catalogue) et le nouveau (v2: catégories) */
+function parseData(d){
+if(!d)return null;
+if(d.cats&&typeof d.cats==='object'){
+const cats={};
+for(const [name,c] of Object.entries(d.cats))cats[name]={fileName:c.fileName||'',products:normProducts(c.products)};
+const names=Object.keys(cats);
+if(!names.length)return null;
+return{current:cats[d.current]?d.current:names[0],cats};
+}
+if(Array.isArray(d.products)){
+return{current:'Général',cats:{'Général':{fileName:d.fileName||'',products:normProducts(d.products)}}};
+}
+return null;
 }
 function restore(){
 try{
-const raw=localStorage.getItem(STORE_KEY);
+let raw=localStorage.getItem(STORE_KEY);
+if(!raw)raw=localStorage.getItem(OLD_KEY); /* migration depuis la version 1.1 */
 if(!raw)return false;
-const d=JSON.parse(raw);
-if(!d||!Array.isArray(d.products)||!d.products.length)return false;
-applyData(d);
-const when=d.savedAt?new Date(d.savedAt).toLocaleString('fr-FR'):'';
-setSaveState('✓ Données restaurées'+(when?' (dernière sauvegarde : '+when+')':''));
-$('fileInfo').textContent=(d.fileName?d.fileName+' · ':'')+d.products.length+' produits restaurés depuis la sauvegarde.';
+const parsed=parseData(JSON.parse(raw));
+if(!parsed)return false;
+DB=parsed;
 return true;
 }catch(e){return false;}
 }
+
+/* ---------- CATÉGORIES ---------- */
+function renderCats(){
+$('catSel').innerHTML=Object.keys(DB.cats).map(n=>`<option value="${esc(n)}"${n===DB.current?' selected':''}>${esc(n)} (${DB.cats[n].products.length})</option>`).join('');
+$('catName').textContent=DB.current;
+$('catName2').textContent=DB.current;
+}
+function switchCat(name){
+if(!DB.cats[name])return;
+if(auto){auto=false;}
+DB.current=name;useCurrent();
+$('filter').value='';
+refreshAll();save();
+}
+function refreshAll(){
+renderCats();
+$('workspace').classList.toggle('hidden',!products.length&&Object.values(DB.cats).every(c=>!c.products.length));
+render();
+const c=cur();
+$('fileInfo').textContent=products.length?((c.fileName?c.fileName+' · ':'')+products.length+' produits dans cette catégorie.'):'Choisissez un fichier pour commencer.';
+}
+$('catSel').addEventListener('change',e=>switchCat(e.target.value));
+$('catNew').addEventListener('click',()=>{
+const n=(prompt('Nom de la nouvelle catégorie (ex : Abat-jour, Lustres, Lampes de table) :')||'').trim();
+if(!n)return;
+if(DB.cats[n]){alert('Cette catégorie existe déjà.');return;}
+DB.cats[n]={fileName:'',products:[]};
+switchCat(n);
+});
+$('catRename').addEventListener('click',()=>{
+const n=(prompt('Nouveau nom pour « '+DB.current+' » :',DB.current)||'').trim();
+if(!n||n===DB.current)return;
+if(DB.cats[n]){alert('Une catégorie porte déjà ce nom.');return;}
+const rebuilt={};
+for(const [k,v] of Object.entries(DB.cats))rebuilt[k===DB.current?n:k]=v;
+DB.cats=rebuilt;DB.current=n;useCurrent();
+refreshAll();save();
+});
+$('catDel').addEventListener('click',()=>{
+const names=Object.keys(DB.cats);
+if(!confirm('Supprimer la catégorie « '+DB.current+' » avec tous ses produits et images ?\n\nAstuce : téléchargez d’abord la sauvegarde .json.'))return;
+if(auto)auto=false;
+delete DB.cats[DB.current];
+if(names.length===1)DB.cats['Général']={fileName:'',products:[]};
+DB.current=Object.keys(DB.cats)[0];
+useCurrent();refreshAll();save();
+});
+
+/* ---------- BACKUP JSON ---------- */
 $('backupBtn').addEventListener('click',()=>{
 const blob=new Blob([JSON.stringify(snapshot(),null,2)],{type:'application/json'});
 const a=document.createElement('a');
@@ -171,24 +272,25 @@ $('backupFile').addEventListener('change',async e=>{
 const f=e.target.files[0];if(!f)return;
 try{
 const d=JSON.parse(await f.text());
-if(!d||d.app!=='product-image-finder'||!Array.isArray(d.products))throw Error('Fichier de sauvegarde invalide.');
-if(products.length&&!confirm('Remplacer les données actuelles par cette sauvegarde ?')){e.target.value='';return;}
-applyData(d);save();
-$('fileInfo').textContent='Sauvegarde chargée : '+d.products.length+' produits.';
+if(d.app!=='product-image-finder')throw Error('Fichier de sauvegarde invalide.');
+const parsed=parseData(d);
+if(!parsed)throw Error('Fichier de sauvegarde invalide.');
+const hasData=Object.values(DB.cats).some(c=>c.products.length);
+if(hasData&&!confirm('Remplacer TOUTES les catégories actuelles par cette sauvegarde ?')){e.target.value='';return;}
+DB=parsed;useCurrent();refreshAll();save();
+$('fileInfo').textContent='Sauvegarde chargée : '+Object.keys(DB.cats).length+' catégorie(s).';
 }catch(err){
 $('fileInfo').innerHTML='<span class="error">'+esc(err.message)+'</span>';
 }
 e.target.value='';
 });
 $('clearBtn').addEventListener('click',()=>{
-if(!confirm('Effacer tous les produits et toutes les images sélectionnées ? Cette action est définitive.\n\nAstuce : téléchargez d’abord la sauvegarde .json.'))return;
-products=[];fileName='';
-try{localStorage.removeItem(STORE_KEY);}catch(e){}
-$('workspace').classList.add('hidden');
-render();
-$('fileInfo').textContent='Choisissez un fichier pour commencer.';
+if(!confirm('Vider la catégorie « '+DB.current+' » (produits + images) ? Action définitive.\n\nAstuce : téléchargez d’abord la sauvegarde .json.'))return;
+if(auto)auto=false;
+cur().products=[];cur().fileName='';useCurrent();
+refreshAll();save();
 });
-window.addEventListener('beforeunload',()=>{if(products.length)save();});
+window.addEventListener('beforeunload',()=>{save();});
 
 /* ---------- STATUT API ---------- */
 async function checkStatus(){
@@ -196,7 +298,7 @@ try{
 const r=await fetch('/api/status');
 const d=await r.json();
 if(!d.configured)$('apiNotice').innerHTML='⚙️ <b>Recherche non configurée.</b> Ajoutez votre clé SerpApi dans le fichier <code>.env</code> du serveur pour activer la recherche d’images. <span class="tag">Excel local activé</span>';
-else $('apiNotice').innerHTML='✓ Service de recherche connecté. Les résultats sont des suggestions : vérifiez la correspondance avant de sélectionner une image.';
+else $('apiNotice').innerHTML='✓ Service de recherche connecté. Les images choisies automatiquement sont des suggestions : vérifiez-les et changez-les si besoin (bouton « Changer l’image »).';
 }catch(e){
 $('apiNotice').innerHTML='Le serveur de recherche n’est pas joignable. Vérifiez que le site est lancé avec Node.js.';
 }
@@ -209,7 +311,7 @@ try{
 const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
 sourceRows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
 if(sourceRows.length<2)throw Error('Le fichier ne contient pas assez de lignes.');
-fileName=f.name;
+sourceRows.fileName=f.name;
 const headers=sourceRows[0].map((h,i)=>String(h||`Colonne ${i+1}`));
 const opts=headers.map((h,i)=>`<option value="${i}">${esc(h)}</option>`).join('');
 $('nameCol').innerHTML=opts;$('priceCol').innerHTML=opts;
@@ -218,17 +320,18 @@ const pi=headers.findIndex(h=>/prix|price|tarif|ttc/i.test(h));
 $('nameCol').value=ni>=0?ni:0;
 $('priceCol').value=pi>=0?pi:Math.min(1,headers.length-1);
 $('nameCol').disabled=$('priceCol').disabled=$('loadBtn').disabled=false;
-$('fileInfo').textContent=`${f.name} · ${sourceRows.length-1} lignes détectées · Feuille : ${wb.SheetNames[0]}`;
+$('fileInfo').textContent=`${f.name} · ${sourceRows.length-1} lignes détectées · Feuille : ${wb.SheetNames[0]} → sera importé dans « ${DB.current} »`;
 }catch(err){
 $('fileInfo').innerHTML=`<span class="error">${esc(err.message)}</span>`;
 }
 });
 $('loadBtn').addEventListener('click',()=>{
-if(products.some(p=>p.image)&&!confirm('Vous avez déjà des images sélectionnées. L’import va les remplacer.\n\nContinuer ? (pensez à télécharger la sauvegarde .json avant)'))return;
+if(products.some(p=>p.image)&&!confirm('La catégorie « '+DB.current+' » contient déjà des images sélectionnées. L’import va les remplacer.\n\nContinuer ? (pensez à télécharger la sauvegarde .json avant)'))return;
 const ni=+$('nameCol').value,pi=+$('priceCol').value;
-products=sourceRows.slice(1).filter(r=>String(r[ni]??'').trim()).map((r,i)=>({id:i,name:String(r[ni]).trim(),price:r[pi]??'',image:'',source:'',link:'',candidates:[]}));
-$('workspace').classList.remove('hidden');
-render();save();checkStatus();$('workspace').scrollIntoView({behavior:'smooth'});
+cur().products=sourceRows.slice(1).filter(r=>String(r[ni]??'').trim()).map((r,i)=>({id:i,name:String(r[ni]).trim(),price:r[pi]??'',image:'',source:'',link:'',candidates:[]}));
+cur().fileName=sourceRows.fileName||'';
+useCurrent();
+refreshAll();save();checkStatus();$('workspace').scrollIntoView({behavior:'smooth'});
 });
 
 /* ---------- AFFICHAGE ---------- */
@@ -237,31 +340,46 @@ $('total').textContent=products.length;
 $('found').textContent=products.filter(p=>p.image).length;
 $('remaining').textContent=products.filter(p=>!p.image).length;
 $('export').disabled=!products.length;
+$('exportAll').disabled=!Object.values(DB.cats).some(c=>c.products.length);
+}
+function candidatesHTML(p){
+return (p.candidates||[]).map((c,i)=>`<button class="candidate${c.image&&c.image===p.image?' selected':''}" onclick="chooseImage(${p.id},${i})" title="${esc(c.title)}"><img src="${esc(c.thumbnail)}" alt=""><small>${esc(c.source||c.title)}</small></button>`).join('');
 }
 function render(){
 const q=$('filter').value.toLowerCase();
-$('products').innerHTML=products.filter(p=>p.name.toLowerCase().includes(q)).map(p=>`<article class="card"><div class="photo">${p.image?`<img src="${esc(p.image)}" alt="${esc(p.name)}">`:'<div class="placeholder">🖼️<br>Aucune image sélectionnée</div>'}</div><div class="cardbody"><div class="name">${esc(p.name)}</div><div class="price">${esc(p.price)} ${p.price!==''?'DH':''}</div><div class="actions"><button class="btn" onclick="searchImages(${p.id})">🔎 Chercher une image</button><button class="btn light" onclick="manualSearch(${p.id})">Recherche web ↗</button>${p.image?`<button class="btn light" onclick="clearImage(${p.id})">Retirer</button>`:''}</div><div class="status">${p.image?'✓ Image sélectionnée':'En attente de sélection'}</div><div class="results" id="results-${p.id}"></div></div></article>`).join('');
+$('products').innerHTML=products.filter(p=>p.name.toLowerCase().includes(q)).map(p=>`<article class="card"><div class="photo">${p.image?`<img src="${esc(p.image)}" alt="${esc(p.name)}">`:'<div class="placeholder">🖼️<br>Aucune image sélectionnée</div>'}</div><div class="cardbody"><div class="name">${esc(p.name)}</div><div class="price">${esc(p.price)} ${p.price!==''?'DH':''}</div><div class="actions"><button class="btn" onclick="searchImages(${p.id})">${p.image?'🔄 Changer l’image':'🔎 Chercher une image'}</button><button class="btn light" onclick="manualSearch(${p.id})">Recherche web ↗</button>${p.image?`<button class="btn light" onclick="clearImage(${p.id})">Retirer</button>`:''}</div><div class="status">${p.image?'✓ Image sélectionnée (modifiable)':'En attente de sélection'}</div><div class="results" id="results-${p.id}">${candidatesHTML(p)}</div></div></article>`).join('');
 stats();
+renderCats();
 }
 $('filter').addEventListener('input',render);
-async function searchImages(id){
-const p=products.find(x=>x.id===id),box=$('results-'+id);
-if(!box)return;
-box.innerHTML='<span class="muted">Recherche en cours…</span>';
-try{
+
+async function fetchCandidates(p){
 const r=await fetch('/api/images?q='+encodeURIComponent(p.name));
 const d=await r.json();
 if(!r.ok)throw Error(d.error||'Erreur de recherche');
 p.candidates=d.results||[];
-if(!p.candidates.length){box.innerHTML='<span class="muted">Aucun résultat trouvé. Essayez une recherche plus précise.</span>';return;}
-box.innerHTML=p.candidates.map((c,i)=>`<button class="candidate" onclick="chooseImage(${id},${i})" title="${esc(c.title)}"><img src="${esc(c.thumbnail)}" alt=""><small>${esc(c.source||c.title)}</small></button>`).join('');
+return p.candidates;
+}
+function pick(p,c){p.image=c.image;p.source=c.source||'';p.link=c.link||'';}
+
+/* recherche manuelle d'un produit : choisit automatiquement la 1ère image si le produit n'en a pas */
+async function searchImages(id){
+const p=products.find(x=>x.id===id),box=$('results-'+id);
+if(!p)return;
+if(box)box.innerHTML='<span class="muted">Recherche en cours…</span>';
+try{
+await fetchCandidates(p);
+if(!p.candidates.length){if(box)box.innerHTML='<span class="muted">Aucun résultat trouvé. Essayez une recherche plus précise.</span>';return;}
+if(!p.image){const c=p.candidates.find(x=>x.image);if(c){pick(p,c);save();}}
+render();
 }catch(e){
-box.innerHTML=`<span class="muted error">${esc(e.message)}</span>`;
+if(box)box.innerHTML=`<span class="muted error">${esc(e.message)}</span>`;
 }
 }
 function chooseImage(id,i){
 const p=products.find(x=>x.id===id),c=p.candidates[i];
-p.image=c.image;p.source=c.source;p.link=c.link;render();save();
+if(!c)return;
+pick(p,c);render();save();
 }
 function clearImage(id){
 const p=products.find(x=>x.id===id);
@@ -272,19 +390,83 @@ const p=products.find(x=>x.id===id);
 window.open('https://www.google.com/search?tbm=isch&q='+encodeURIComponent(p.name),'_blank','noopener');
 }
 
+/* ---------- RECHERCHE AUTOMATIQUE (toute la catégorie) ---------- */
+function setAutoUI(running,done,total,msg){
+$('autoBtn').textContent=running?'⏹ Arrêter la recherche automatique':'⚡ Recherche automatique des images';
+$('autoBtn').classList.toggle('danger',running);
+$('autoBtn').classList.toggle('green',!running);
+$('progWrap').classList.toggle('hidden',!running);
+$('prog').style.width=total?Math.round(done/total*100)+'%':'0';
+if(msg)$('autoInfo').textContent=msg;
+}
+$('autoBtn').addEventListener('click',async()=>{
+if(auto){auto=false;return;}
+const catName=DB.current;
+const todo=products.filter(p=>!p.image);
+if(!todo.length){$('autoInfo').textContent='✓ Tous les produits de cette catégorie ont déjà une image.';return;}
+auto=true;
+let done=0,okCount=0,errs=0,lastErr='';
+setAutoUI(true,0,todo.length,`Recherche en cours… 0 / ${todo.length}`);
+for(const p of todo){
+if(!auto||DB.current!==catName)break;
+try{
+await fetchCandidates(p);
+const c=p.candidates.find(x=>x.image);
+if(c){pick(p,c);okCount++;}
+errs=0;
+}catch(e){
+errs++;lastErr=e.message;
+if(errs>=3)break; /* probablement quota/clé invalide : on s'arrête */
+}
+done++;
+setAutoUI(true,done,todo.length,`Recherche en cours… ${done} / ${todo.length} (${okCount} images trouvées)`);
+if(DB.current===catName){stats();if(done%4===0)render();}
+save();
+await sleep(350);
+}
+const stopped=!auto;
+auto=false;
+if(DB.current===catName)render();
+save();
+let msg=`✓ Terminé : ${okCount} image(s) choisie(s) automatiquement sur ${todo.length}. Vous pouvez changer n’importe quelle image.`;
+if(errs>=3)msg=`⚠️ Arrêté après plusieurs erreurs (${lastErr}). ${okCount} image(s) trouvée(s). Les données sont sauvegardées.`;
+else if(stopped&&done<todo.length)msg=`⏹ Arrêté : ${okCount} image(s) choisie(s) sur ${done} produit(s) traités. Vous pouvez reprendre quand vous voulez.`;
+setAutoUI(false,0,0,msg);
+});
+
 /* ---------- EXPORT EXCEL ---------- */
-$('export').addEventListener('click',()=>{
-const rows=[['Nom du produit','Prix','URL de l’image','Source','Lien source'],...products.map(p=>[p.name,p.price,p.image,p.source,p.link])];
-const ws=XLSX.utils.aoa_to_sheet(rows);
+const rowsOf=list=>[['Nom du produit','Prix','URL de l’image','Source','Lien source'],...list.map(p=>[p.name,p.price,p.image,p.source,p.link])];
+function makeSheet(list){
+const ws=XLSX.utils.aoa_to_sheet(rowsOf(list));
 ws['!cols']=[{wch:45},{wch:16},{wch:75},{wch:35},{wch:75}];
+return ws;
+}
+const safeName=s=>String(s).replace(/[\\\/\?\*\[\]:]/g,' ').trim().slice(0,31)||'Catégorie';
+$('export').addEventListener('click',()=>{
 const wb=XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(wb,ws,'Catalogue');
-XLSX.writeFile(wb,'Catalogue_Produits_Avec_Images.xlsx');
+XLSX.utils.book_append_sheet(wb,makeSheet(products),safeName(DB.current));
+XLSX.writeFile(wb,'Catalogue_'+safeName(DB.current).replace(/\s+/g,'_')+'.xlsx');
+});
+$('exportAll').addEventListener('click',()=>{
+const wb=XLSX.utils.book_new(),used=new Set();
+for(const [name,c] of Object.entries(DB.cats)){
+if(!c.products.length)continue;
+let s=safeName(name),k=2;
+while(used.has(s.toLowerCase()))s=safeName(name).slice(0,28)+' '+(k++);
+used.add(s.toLowerCase());
+XLSX.utils.book_append_sheet(wb,makeSheet(c.products),s);
+}
+XLSX.writeFile(wb,'Catalogue_Toutes_Categories.xlsx');
 });
 
 /* ---------- DÉMARRAGE ---------- */
-checkStatus();
 restore();
+useCurrent();
+refreshAll();
+if(products.length||Object.values(DB.cats).some(c=>c.products.length)){
+setSaveState('✓ Données restaurées ('+Object.keys(DB.cats).length+' catégorie(s))');
+}
+checkStatus();
 </script>
 </body>
 </html>
