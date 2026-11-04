@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="fr">
 <head>
@@ -27,6 +26,7 @@ h2{font-size:17px;margin:0 0 15px}
 .btn{border:0;border-radius:9px;padding:10px 14px;background:var(--purple);color:#fff;font-weight:700;cursor:pointer}
 .btn:hover{background:var(--deep)}
 .btn.light{background:#eee9f8;color:#56399e}
+.btn.danger{background:#fde8e8;color:#b42318}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .field{padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);max-width:100%}
 .notice{padding:11px 13px;border-radius:9px;background:#f3effb;color:#5e478e;font-size:12px;line-height:1.55}
@@ -55,6 +55,10 @@ h2{font-size:17px;margin:0 0 15px}
 .error{color:#b42318}
 .footer{text-align:center;color:#928da0;font-size:11px;padding:15px}
 .tag{display:inline-block;background:#f0eafa;color:#6041a8;padding:5px 8px;border-radius:20px;font-size:11px}
+.savebar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 14px;padding:11px 13px;border-radius:10px;background:#f0faf4;border:1px solid #cfe9d9}
+.savebar .btn{font-size:12px;padding:8px 11px}
+#saveState{font-size:12px;color:#256b43;font-weight:600;margin-right:auto}
+#saveState.warn{color:#b42318}
 @media(max-width:600px){.hero{align-items:flex-start;flex-direction:column}.hero h1{font-size:24px}.stats{gap:6px}.stat{padding:10px}.stat b{font-size:18px}}
 </style>
 </head>
@@ -66,7 +70,7 @@ h2{font-size:17px;margin:0 0 15px}
 <h1>Trouvez les images de vos produits</h1>
 <p>Importez votre fichier Excel, vérifiez les images et exportez votre catalogue.</p>
 </div>
-<div class="version">VERSION 1.0</div>
+<div class="version">VERSION 1.1</div>
 </div>
 </header>
 <main>
@@ -86,6 +90,10 @@ h2{font-size:17px;margin:0 0 15px}
 <button id="loadBtn" class="btn" disabled>Importer les produits</button>
 </div>
 <div id="fileInfo" class="muted" style="margin-top:10px">Choisissez un fichier pour commencer.</div>
+<div class="row">
+<label class="btn light" for="backupFile" style="display:inline-block">📂 Charger une sauvegarde (.json)</label>
+<input id="backupFile" type="file" accept=".json,application/json" class="hidden">
+</div>
 </section>
 <section id="workspace" class="panel hidden">
 <div class="toolbar">
@@ -94,6 +102,11 @@ h2{font-size:17px;margin:0 0 15px}
 <input id="filter" class="field" placeholder="Rechercher un produit…">
 <button id="export" class="btn" disabled>↓ Exporter Excel</button>
 </div>
+</div>
+<div class="savebar">
+<span id="saveState">Sauvegarde automatique activée</span>
+<button id="backupBtn" class="btn light">💾 Télécharger la sauvegarde (.json)</button>
+<button id="clearBtn" class="btn danger">🗑️ Tout effacer</button>
 </div>
 <div class="stats">
 <div class="stat"><b id="total">0</b><span>Produits importés</span></div>
@@ -106,9 +119,78 @@ h2{font-size:17px;margin:0 0 15px}
 <div class="footer">Product Image Finder · Vérifiez les droits d’utilisation des images avant toute publication commerciale.</div>
 </main>
 <script>
-let sourceRows=[],products=[];
+let sourceRows=[],products=[],fileName='';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const STORE_KEY='product_image_finder_v1';
+
+/* ---------- SAUVEGARDE ---------- */
+function snapshot(){
+return{app:'product-image-finder',version:1,savedAt:new Date().toISOString(),fileName,
+products:products.map(p=>({id:p.id,name:p.name,price:p.price,image:p.image,source:p.source,link:p.link}))};
+}
+function setSaveState(msg,warn){
+const el=$('saveState');el.textContent=msg;el.classList.toggle('warn',!!warn);
+}
+function save(){
+try{
+localStorage.setItem(STORE_KEY,JSON.stringify(snapshot()));
+setSaveState('✓ Sauvegardé automatiquement à '+new Date().toLocaleTimeString('fr-FR'));
+}catch(e){
+setSaveState('⚠️ Sauvegarde automatique impossible — téléchargez la sauvegarde .json',true);
+}
+}
+function applyData(d){
+products=d.products.map((p,i)=>({id:i,name:String(p.name??''),price:p.price??'',image:p.image||'',source:p.source||'',link:p.link||'',candidates:[]}));
+fileName=d.fileName||'';
+$('workspace').classList.remove('hidden');
+render();
+}
+function restore(){
+try{
+const raw=localStorage.getItem(STORE_KEY);
+if(!raw)return false;
+const d=JSON.parse(raw);
+if(!d||!Array.isArray(d.products)||!d.products.length)return false;
+applyData(d);
+const when=d.savedAt?new Date(d.savedAt).toLocaleString('fr-FR'):'';
+setSaveState('✓ Données restaurées'+(when?' (dernière sauvegarde : '+when+')':''));
+$('fileInfo').textContent=(d.fileName?d.fileName+' · ':'')+d.products.length+' produits restaurés depuis la sauvegarde.';
+return true;
+}catch(e){return false;}
+}
+$('backupBtn').addEventListener('click',()=>{
+const blob=new Blob([JSON.stringify(snapshot(),null,2)],{type:'application/json'});
+const a=document.createElement('a');
+a.href=URL.createObjectURL(blob);
+a.download='Sauvegarde_Produits_'+new Date().toISOString().slice(0,10)+'.json';
+document.body.appendChild(a);a.click();a.remove();
+setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+});
+$('backupFile').addEventListener('change',async e=>{
+const f=e.target.files[0];if(!f)return;
+try{
+const d=JSON.parse(await f.text());
+if(!d||d.app!=='product-image-finder'||!Array.isArray(d.products))throw Error('Fichier de sauvegarde invalide.');
+if(products.length&&!confirm('Remplacer les données actuelles par cette sauvegarde ?')){e.target.value='';return;}
+applyData(d);save();
+$('fileInfo').textContent='Sauvegarde chargée : '+d.products.length+' produits.';
+}catch(err){
+$('fileInfo').innerHTML='<span class="error">'+esc(err.message)+'</span>';
+}
+e.target.value='';
+});
+$('clearBtn').addEventListener('click',()=>{
+if(!confirm('Effacer tous les produits et toutes les images sélectionnées ? Cette action est définitive.\n\nAstuce : téléchargez d’abord la sauvegarde .json.'))return;
+products=[];fileName='';
+try{localStorage.removeItem(STORE_KEY);}catch(e){}
+$('workspace').classList.add('hidden');
+render();
+$('fileInfo').textContent='Choisissez un fichier pour commencer.';
+});
+window.addEventListener('beforeunload',()=>{if(products.length)save();});
+
+/* ---------- STATUT API ---------- */
 async function checkStatus(){
 try{
 const r=await fetch('/api/status');
@@ -119,12 +201,15 @@ else $('apiNotice').innerHTML='✓ Service de recherche connecté. Les résultat
 $('apiNotice').innerHTML='Le serveur de recherche n’est pas joignable. Vérifiez que le site est lancé avec Node.js.';
 }
 }
+
+/* ---------- IMPORT EXCEL ---------- */
 $('file').addEventListener('change',async e=>{
 const f=e.target.files[0];if(!f)return;
 try{
 const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
 sourceRows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
 if(sourceRows.length<2)throw Error('Le fichier ne contient pas assez de lignes.');
+fileName=f.name;
 const headers=sourceRows[0].map((h,i)=>String(h||`Colonne ${i+1}`));
 const opts=headers.map((h,i)=>`<option value="${i}">${esc(h)}</option>`).join('');
 $('nameCol').innerHTML=opts;$('priceCol').innerHTML=opts;
@@ -139,11 +224,14 @@ $('fileInfo').innerHTML=`<span class="error">${esc(err.message)}</span>`;
 }
 });
 $('loadBtn').addEventListener('click',()=>{
+if(products.some(p=>p.image)&&!confirm('Vous avez déjà des images sélectionnées. L’import va les remplacer.\n\nContinuer ? (pensez à télécharger la sauvegarde .json avant)'))return;
 const ni=+$('nameCol').value,pi=+$('priceCol').value;
 products=sourceRows.slice(1).filter(r=>String(r[ni]??'').trim()).map((r,i)=>({id:i,name:String(r[ni]).trim(),price:r[pi]??'',image:'',source:'',link:'',candidates:[]}));
 $('workspace').classList.remove('hidden');
-render();checkStatus();$('workspace').scrollIntoView({behavior:'smooth'});
+render();save();checkStatus();$('workspace').scrollIntoView({behavior:'smooth'});
 });
+
+/* ---------- AFFICHAGE ---------- */
 function stats(){
 $('total').textContent=products.length;
 $('found').textContent=products.filter(p=>p.image).length;
@@ -173,16 +261,18 @@ box.innerHTML=`<span class="muted error">${esc(e.message)}</span>`;
 }
 function chooseImage(id,i){
 const p=products.find(x=>x.id===id),c=p.candidates[i];
-p.image=c.image;p.source=c.source;p.link=c.link;render();
+p.image=c.image;p.source=c.source;p.link=c.link;render();save();
 }
 function clearImage(id){
 const p=products.find(x=>x.id===id);
-p.image=p.source=p.link='';render();
+p.image=p.source=p.link='';render();save();
 }
 function manualSearch(id){
 const p=products.find(x=>x.id===id);
 window.open('https://www.google.com/search?tbm=isch&q='+encodeURIComponent(p.name),'_blank','noopener');
 }
+
+/* ---------- EXPORT EXCEL ---------- */
 $('export').addEventListener('click',()=>{
 const rows=[['Nom du produit','Prix','URL de l’image','Source','Lien source'],...products.map(p=>[p.name,p.price,p.image,p.source,p.link])];
 const ws=XLSX.utils.aoa_to_sheet(rows);
@@ -191,7 +281,10 @@ const wb=XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(wb,ws,'Catalogue');
 XLSX.writeFile(wb,'Catalogue_Produits_Avec_Images.xlsx');
 });
+
+/* ---------- DÉMARRAGE ---------- */
 checkStatus();
+restore();
 </script>
 </body>
 </html>
