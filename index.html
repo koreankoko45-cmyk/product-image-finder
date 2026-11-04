@@ -1,124 +1,89 @@
 <!doctype html>
 <html lang="fr">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Product Image Finder - Auto Save</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Product Finder - Real Search + Auto Save</title>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
-:root{--purple:#7653c7;--bg:#f6f4fb;--line:#e9e4f1}
-*{box-sizing:border-box}
-body{margin:0;font-family:system-ui;background:var(--bg)}
-.header{background:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10;flex-wrap:wrap;gap:10px}
-.btn{background:var(--purple);color:#fff;border:0;padding:10px 16px;border-radius:10px;cursor:pointer;font-weight:600}
-.btn-sec{background:#fff;color:var(--purple);border:1px solid var(--purple)}
-.bar{display:flex;gap:8px;flex-wrap:wrap}
-.main{padding:16px;max-width:1200px;margin:auto}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:16px}
-.imgbox{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;cursor:pointer}
-.imgbox img{width:100%;height:180px;object-fit:cover;display:block}
-.imgbox .meta{padding:8px;font-size:12px}
-.imgbox.selected{outline:3px solid var(--purple)}
-input.search{flex:1;padding:12px;border-radius:10px;border:1px solid var(--line)}
-.status{margin-top:10px;color:#666;font-size:13px}
+body{margin:0;font-family:system-ui;background:#f6f4fb}
+.header{background:#fff;padding:12px 16px;display:flex;justify-content:space-between;border-bottom:1px solid #e9e4f1;position:sticky;top:0;z-index:10;flex-wrap:wrap;gap:8px}
+.btn{background:#7653c7;color:#fff;border:0;padding:9px 14px;border-radius:10px;cursor:pointer;font-weight:600}
+.btn2{background:#fff;color:#7653c7;border:1px solid #7653c7;padding:9px 14px;border-radius:10px;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;padding:16px}
+.card{background:#fff;border:1px solid #e9e4f1;border-radius:12px;overflow:hidden;cursor:pointer}
+.card img{width:100%;height:180px;object-fit:cover}
+.card .m{padding:6px;font-size:11px;word-break:break-all}
+.card.sel{outline:3px solid #7653c7}
+input{padding:11px;border:1px solid #e9e4f1;border-radius:10px;width:300px}
 </style>
 </head>
 <body>
 <div class="header">
-  <div><b id="count">0 محفوظ</b> <span style="font-size:12px;color:#777">- الحفظ أوتوماتيك كل 3 ثواني</span></div>
-  <div class="bar">
-    <button class="btn-sec btn" onclick="restore(true)">استرجاع</button>
-    <button class="btn-sec btn" onclick="clearSave()">مسح الحفظ</button>
-    <button class="btn" id="zipBtn">تحميل ZIP</button>
-    <button class="btn" id="excelBtn">Excel</button>
-  </div>
+<div><b id="cnt">0 محفوظ</b> - <small id="st">الحفظ أوتوماتيك كل 3 ثواني - ما كيضيع والو</small></div>
+<div>
+<button class="btn2" onclick="restore(true)">استرجاع</button>
+<button class="btn2" onclick="clearAll()">مسح</button>
+<button class="btn" id="zip">ZIP</button>
+<button class="btn" id="xl">Excel</button>
 </div>
-
-<div class="main">
-  <div class="bar">
-    <input id="q" class="search" placeholder="مثلا: eyeliner, fond de teint...">
-    <button class="btn" id="searchBtn">بحث</button>
-  </div>
-  <div class="status" id="status">جاهز - الصور ما غاديش تضيع وخا تخرج بالغلط</div>
-  <div class="grid" id="grid"></div>
 </div>
+<div style="padding:16px">
+<input id="q" placeholder="مثلا: robe, eyeliner, montre...">
+<button class="btn" id="go">بحث</button>
+</div>
+<div class="grid" id="grid"></div>
 
 <script>
-const KEY = 'odarym_auto_save_v3';
-let selected = [];
-let all = [];
+const KEY='odarym_real_v4';
+let selected=JSON.parse(localStorage.getItem(KEY)||'[]');
+let allImages=[...selected];
+const grid=document.getElementById('grid');
+const cnt=document.getElementById('cnt');
+const st=document.getElementById('st');
 
-function load(){ try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return []} }
-function saveNow(){
-  if(selected.length>0){
-    localStorage.setItem(KEY, JSON.stringify(selected));
-    document.getElementById('count').textContent = selected.length + ' محفوظ';
-    document.getElementById('status').textContent = 'تم الحفظ ✅ ' + new Date().toLocaleTimeString() + ' - ' + selected.length + ' صورة';
-  }
-}
+function save(){ localStorage.setItem(KEY, JSON.stringify(selected)); cnt.textContent=selected.length+' محفوظ'; st.textContent='تم الحفظ ✅ '+new Date().toLocaleTimeString()+' - '+selected.length; }
+setInterval(save,3000);
+window.addEventListener('beforeunload',e=>{ if(selected.length>0){save(); e.preventDefault(); e.returnValue='';} });
+
 function restore(ask){
-  const s=load();
-  if(s.length==0){ if(!ask) return; alert('ما كاين والو محفوظ'); return; }
-  if(ask && !confirm('لقينا '+s.length+' تصويرة محفوظة، نرجعوهم؟')) return;
-  selected=s; all=[...selected, ...all.filter(a=>!selected.find(x=>x.url===a.url))];
-  render(); saveNow();
+ const s=JSON.parse(localStorage.getItem(KEY)||'[]');
+ if(s.length==0){ if(ask) alert('ما كاين والو'); return;}
+ if(ask && !confirm('لقينا '+s.length+' محفوظة نرجعوهم؟')) return;
+ selected=s; allImages=[...selected]; render(); save();
 }
-function clearSave(){
-  if(confirm('تمسح كلشي المحفوظ؟')){ localStorage.removeItem(KEY); selected=[]; render(); saveNow(); document.getElementById('count').textContent='0 محفوظ'; }
-}
-
-document.addEventListener('DOMContentLoaded', ()=>{
-  selected=load();
-  if(selected.length>0) restore(true);
-  setInterval(saveNow,3000);
-  window.addEventListener('beforeunload', (e)=>{ if(selected.length>0){ saveNow(); e.preventDefault(); e.returnValue=''; } });
-});
+function clearAll(){ if(confirm('مسح الحفظ؟')){ localStorage.removeItem(KEY); selected=[]; allImages=[]; render(); save(); } }
 
 function render(){
-  const g=document.getElementById('grid'); g.innerHTML='';
-  document.getElementById('count').textContent = selected.length + ' محفوظ';
-  all.forEach(img=>{
-    const is=selected.find(s=>s.url===img.url);
-    const d=document.createElement('div'); d.className='imgbox'+(is?' selected':'');
-    d.innerHTML=`<img src="${img.url}" loading="lazy"><div class="meta"><input type="checkbox" ${is?'checked':''}> ${img.name}</div>`;
-    d.onclick=()=>{ const i=selected.findIndex(s=>s.url===img.url); if(i>=0) selected.splice(i,1); else selected.push(img); saveNow(); render(); };
-    g.appendChild(d);
-  });
+ grid.innerHTML=''; cnt.textContent=selected.length+' محفوظ';
+ allImages.forEach(img=>{
+   const is=selected.find(x=>x.url===img.url);
+   const d=document.createElement('div'); d.className='card'+(is?' sel':'');
+   d.innerHTML=`<img src="${img.url}" loading="lazy" onerror="this.src='https://via.placeholder.com/200'"><div class="m"><input type="checkbox" ${is?'checked':''}> ${img.name||''}</div>`;
+   d.onclick=()=>{ const i=selected.findIndex(x=>x.url===img.url); if(i>=0) selected.splice(i,1); else selected.push(img); save(); render(); };
+   grid.appendChild(d);
+ });
 }
 
-async function doSearch(query){
-  if(!query) return;
-  document.getElementById('status').textContent='كانقلب على '+query+'...';
-  // DEMO - هنا تقدر ترجع الكود ديالك الأصلي اللي كيقلب فـ Google
-  // أنا درت صور تجريبية باش يبان لك الحفظ خدام
-  const demo=Array.from({length:24}).map((_,i)=>({url:`https://picsum.photos/seed/${encodeURIComponent(query+i)}/400/400`, name:query}));
-  all=[...selected, ...demo];
-  render();
-  document.getElementById('status').textContent='لقينا '+demo.length+' صورة';
+async function search(q){
+ if(!q) return;
+ st.textContent='كانقلب على '+q+'...';
+ try{
+   // كيعيط لـ server.js ديالك اللي فـ Vercel
+   const res=await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+   if(!res.ok) throw new Error('api fail');
+   const data=await res.json();
+   const imgs=data.images||data||[];
+   // حولهم للشكل ديالنا
+   allImages=[...selected, ...imgs.map(u=>typeof u==='string'?{url:u,name:q}:{url:u.url||u.image,name:u.title||q})];
+   render(); st.textContent='لقينا '+imgs.length+' - الحفظ خدام';
+ }catch(e){
+   // إلا ما كاينش api، نخدمو بـ picsum باش ما يبقاش خاوي
+   st.textContent='API ما خدامش، كانجيبو تجريبي...';
+   const demo=Array.from({length:24}).map((_,i)=>({url:`https://picsum.photos/seed/${encodeURIComponent(q+i)}/400/400`, name:q}));
+   allImages=[...selected, ...demo]; render();
+ }
 }
-document.getElementById('searchBtn').onclick=()=>doSearch(document.getElementById('q').value.trim());
-document.getElementById('q').addEventListener('keydown', e=>{ if(e.key==='Enter') doSearch(e.target.value.trim()) });
 
-document.getElementById('zipBtn').onclick=async()=>{
-  if(selected.length===0) return alert('ما مختار والو');
-  document.getElementById('status').textContent='كنوجد ZIP...';
-  const zip=new JSZip();
-  for(let i=0;i<selected.length;i++){
-    try{ const b=await fetch(selected[i].url).then(r=>r.blob()); zip.file((selected[i].name||'produit').replace(/[^a-z0-9]/gi,'_')+'_'+(i+1)+'.jpg', b); }catch(e){}
-  }
-  const content=await zip.generateAsync({type:'blob'});
-  saveAs(content, 'produits_'+Date.now()+'.zip');
-  document.getElementById('status').textContent='ZIP واجد ✅';
-};
-
-document.getElementById('excelBtn').onclick=()=>{
-  if(selected.length===0) return alert('ما مختار والو');
-  const ws=XLSX.utils.json_to_sheet(selected.map((s,i)=>({ID:i+1, Produit:s.name, URL:s.url})));
-  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Produits');
-  XLSX.writeFile(wb, 'produits_'+Date.now()+'.xlsx');
-};
-</script>
-</body>
-</html>
+document.getElementById('go').onclick=()=>search(document.getElementById('q').value
