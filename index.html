@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <title>Image Finder - Privé</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <style>
 :root{--purple:#7653c7}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -14,9 +15,10 @@ main{flex:1; padding:20px; overflow-y:auto}
 .cat b{display:block}
 .cat button{background:var(--purple); color:white; border:0; padding:6px 12px; border-radius:8px; cursor:pointer; margin-top:6px}
 .product-card{background:white; padding:20px; border-radius:16px; box-shadow:0 4px 20px rgba(0,0,0,0.05)}
-.imgs{display:flex; gap:15px; margin-top:15px}
+.imgs{display:flex; gap:15px; margin-top:15px; flex-wrap:wrap}
 .imgs img{width:200px; height:200px; object-fit:contain; border:2px solid #eee; border-radius:12px; cursor:pointer}
-.imgs img.selected{border-color:var(--purple)}
+.imgs img.selected{border-color:var(--purple); border-width:4px}
+input{width:100%; padding:10px; border:1px solid #ddd; border-radius:8px; margin-top:10px}
 </style>
 </head>
 <body>
@@ -24,48 +26,93 @@ main{flex:1; padding:20px; overflow-y:auto}
   <div class="brand">Image Finder Privé</div>
   <div id="cats">Chargement...</div>
   <hr style="margin:15px 0">
-  <button onclick="location.href='/api/export'" style="width:100%; padding:12px; background:#111; color:white; border-radius:10px; border:0">📥 Exporter Excel avec liens</button>
-  <p style="font-size:12px; margin-top:10px; color:#666">رابط واحد - تقدري تخدمي نتي وشخص اخر فنفس الوقت</p>
+  <button onclick="exportExcel()" style="width:100%; padding:12px; background:#111; color:white; border-radius:10px; border:0">📥 Exporter Excel avec liens</button>
+  <p style="font-size:12px; margin-top:10px; color:#666">نسخة ثابتة - خدامة بلا سيرفر - البحث عبر Openverse</p>
 </aside>
 <main>
-  <h1 id="title">اختار مجموعة من اليسار</h1>
+  <h1 id="title">اختاري مجموعة من اليسار</h1>
   <div id="product"></div>
   <div style="margin-top:20px">
     <button id="prevBtn">⬅️ السابق</button>
     <button id="nextBtn">التالي ➡️</button>
     <button id="saveBtn" style="background:var(--purple); color:white; padding:10px 20px; border:0; border-radius:10px">حفظ و المرور للتالي</button>
   </div>
+  <div style="margin-top:15px">
+    <p style="font-size:13px">أو الصقي رابط صورة يدويا:</p>
+    <input id="manualUrl" placeholder="الصقي رابط الصورة هنا...">
+    <button onclick="useManual()" style="padding:10px 15px; background:#111; color:white; border:0; border-radius:8px; margin-top:5px">استعمال هاد الرابط</button>
+  </div>
 </main>
 <script>
-let categories=[], currentCat=null, products=[], currentIndex=0, selectedImage=null;
+let categories=[], currentCat=null, products=[], currentIndex=0, selectedImage=null, allImages={};
+let saved = JSON.parse(localStorage.getItem('savedImages')||'{}');
+
 async function loadCats(){
-  const res = await fetch('/api/categories'); categories=await res.json();
-  document.getElementById('cats').innerHTML = categories.map(c=>`
-    <div class="cat"><b>${c.id}</b><small>${c.done}/${c.total}</small>
-    <div style="height:6px; background:#eee; border-radius:4px"><div style="width:${(c.done/c.total)*100}%; height:100%; background:var(--purple)"></div></div>
-    <button onclick="startCat('${c.id}')">Démarrer / Continuer</button></div>`).join('');
+  try{
+    const res = await fetch('https://api.github.com/repos/webya1/product-image-finder/contents/');
+    const files = await res.json();
+    const xlsxFiles = files.filter(f=>f.name.endsWith('.xlsx'));
+    categories = xlsxFiles.map(f=>({id:f.name.replace('.xlsx',''), file:f.name, done:0, total:0}));
+    document.getElementById('cats').innerHTML = categories.map(c=>`
+      <div class="cat"><b>${c.id}</b><small>ملف: ${c.file}</small><br>
+      <button onclick="startCat('${c.id}')">Démarrer / Continuer</button></div>`).join('');
+  }catch(e){ document.getElementById('cats').innerHTML='خطأ في تحميل الملفات'; }
 }
+
 async function startCat(id){
-  currentCat=id; const res=await fetch(`/api/products?cat=${id}`); products=await res.json();
-  const prog=await fetch('/api/progress').then(r=>r.json());
-  currentIndex = prog[id]?.last ? parseInt(prog[id].last) : 0;
+  currentCat=id;
+  const cat = categories.find(c=>c.id===id);
+  const res = await fetch('./'+cat.file);
+  const buf = await res.arrayBuffer();
+  const wb = XLSX.read(buf, {type:'array'});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  products = XLSX.utils.sheet_to_json(ws);
+  currentIndex = 0;
   showProduct();
 }
+
+async function searchOpenverse(query){
+  try{
+    const res = await fetch(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}&page_size=8&license_type=all`);
+    const data = await res.json();
+    return data.results.map(r=>r.url);
+  }catch(e){ return []; }
+}
+
 async function showProduct(){
   if(!products[currentIndex]) return;
   const p=products[currentIndex];
-  const name=p.Désignation || p.designation || p.Nom || Object.values(p)[0];
+  const name = p.Désignation || p.designation || p.Nom || p['Nom du produit'] || Object.values(p)[0];
   document.getElementById('title').innerText=`${currentCat} - ${currentIndex+1}/${products.length} : ${name}`;
-  document.getElementById('product').innerHTML=`<div class="product-card"><h3>${name}</h3><p>جاري البحث عن صور...</p><div id="imgs" class="imgs"></div></div>`;
-  const imgs=await fetch(`/api/search?q=${encodeURIComponent(name)}`).then(r=>r.json());
-  document.getElementById('imgs').innerHTML=imgs.map((url,i)=>`<img src="${url}" onclick="selectImg(this,'${url}')">`).join('');
+  document.getElementById('product').innerHTML=`<div class="product-card"><h3>${name}</h3><p>جاري البحث عن صور في Openverse...</p><div id="imgs" class="imgs"></div><p id="msg"></p></div>`;
+  selectedImage=null;
+  const imgs = await searchOpenverse(name);
+  if(imgs.length===0){
+    document.getElementById('msg').innerText='لم يتم العثور على صورة، جربي الصق رابط يدوي تحت.';
+  }
+  document.getElementById('imgs').innerHTML=imgs.map(url=>`<img src="${url}" onclick="selectImg(this,'${url}')" onerror="this.style.display='none'">`).join('');
 }
+
 function selectImg(el,url){ document.querySelectorAll('.imgs img').forEach(i=>i.classList.remove('selected')); el.classList.add('selected'); selectedImage=url; }
+function useManual(){
+  const url=document.getElementById('manualUrl').value.trim();
+  if(!url) return alert('الصقي رابط أولا');
+  selectedImage=url;
+  document.getElementById('imgs').innerHTML += `<img src="${url}" class="selected">`;
+}
 async function save(){
-  if(!selectedImage) return alert('اختار تصويرة أولا');
-  const name=products[currentIndex].Désignation || Object.values(products[currentIndex])[0];
-  await fetch('/api/save',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({cat:currentCat, index:currentIndex, imageUrl:selectedImage, designation:name})});
-  currentIndex++; selectedImage=null; showProduct(); loadCats();
+  if(!selectedImage) return alert('اختاري تصويرة أولا');
+  const p=products[currentIndex];
+  const name = p.Désignation || Object.values(p)[0];
+  saved[`${currentCat}_${currentIndex}`] = {name, image:selectedImage};
+  localStorage.setItem('savedImages', JSON.stringify(saved));
+  currentIndex++; selectedImage=null; document.getElementById('manualUrl').value=''; showProduct();
+}
+function exportExcel(){
+  const rows = Object.values(saved).map(s=>({Designation:s.name, Image:s.image}));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Images");
+  XLSX.writeFile(wb, "images_export.xlsx");
 }
 document.getElementById('saveBtn').onclick=save;
 document.getElementById('nextBtn').onclick=()=>{currentIndex++; showProduct()};
