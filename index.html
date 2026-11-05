@@ -347,7 +347,7 @@ return (p.candidates||[]).map((c,i)=>`<button class="candidate${c.image&&c.image
 }
 function render(){
 const q=$('filter').value.toLowerCase();
-$('products').innerHTML=products.filter(p=>p.name.toLowerCase().includes(q)).map(p=>`<article class="card"><div class="photo">${p.image?`<img src="${esc(p.image)}" alt="${esc(p.name)}">`:'<div class="placeholder">🖼️<br>Aucune image sélectionnée</div>'}</div><div class="cardbody"><div class="name">${esc(p.name)}</div><div class="price">${esc(p.price)} ${p.price!==''?'DH':''}</div><div class="actions"><button class="btn" onclick="searchImages(${p.id})">${p.image?'🔄 Changer l’image':'🔎 Chercher une image'}</button><button class="btn light" onclick="manualSearch(${p.id})">Recherche web ↗</button>${p.image?`<button class="btn light" onclick="clearImage(${p.id})">Retirer</button>`:''}</div><div class="status">${p.image?'✓ Image sélectionnée (modifiable)':'En attente de sélection'}</div><div class="results" id="results-${p.id}">${candidatesHTML(p)}</div></div></article>`).join('');
+$('products').innerHTML=products.filter(p=>p.name.toLowerCase().includes(q)).map(p=>`<article class="card"><div class="photo">${p.image?`<img src="${esc(p.image)}" alt="${esc(p.name)}">`:'<div class="placeholder">🖼️<br>Aucune image sélectionnée</div>'}</div><div class="cardbody"><div class="name">${esc(p.name)}</div><div class="price">${esc(p.price)} ${p.price!==''?'DH':''}</div><div class="actions"><button class="btn" onclick="searchImages(${p.id})">${p.image?'🔄 Changer l’image':'🔎 Chercher une image'}</button><button class="btn light" onclick="manualSearch(${p.id})">Recherche web ↗</button><button class="btn light" onclick="pasteImage(${p.id})">🔗 Coller un lien</button>${p.image?`<button class="btn light" onclick="clearImage(${p.id})">Retirer</button>`:''}</div><div class="status">${p.image?'✓ Image sélectionnée (modifiable)':'En attente de sélection'}</div><div class="results" id="results-${p.id}">${candidatesHTML(p)}</div></div></article>`).join('');
 stats();
 renderCats();
 }
@@ -385,6 +385,22 @@ function clearImage(id){
 const p=products.find(x=>x.id===id);
 p.image=p.source=p.link='';render();save();
 }
+/* Image choisie à la main : l'utilisateur colle l'adresse de l'image (aucune recherche SerpApi nécessaire) */
+function pasteImage(id){
+const p=products.find(x=>x.id===id);
+if(!p)return;
+const url=(prompt('Collez l’adresse de l’image pour :\n« '+p.name+' »\n\n(Dans Google Images : clic droit sur l’image → « Copier l’adresse de l’image »)',p.image||'')||'').trim();
+if(!url)return;
+if(!/^https?:\/\//i.test(url)&&!/^data:image\//i.test(url)){
+alert('Lien invalide. Il doit commencer par http:// ou https://');
+return;
+}
+const apply=()=>{p.image=url;p.source='Lien manuel';p.link='';render();save();};
+const test=new Image();
+test.onload=apply;
+test.onerror=()=>{if(confirm('Ce lien ne semble pas être une image directe (la page n’a pas pu l’afficher).\n\nL’utiliser quand même ?'))apply();};
+test.src=url;
+}
 function manualSearch(id){
 const p=products.find(x=>x.id===id);
 window.open('https://www.google.com/search?tbm=isch&q='+encodeURIComponent(p.name),'_blank','noopener');
@@ -409,15 +425,21 @@ let done=0,okCount=0,errs=0,lastErr='';
 setAutoUI(true,0,todo.length,`Recherche en cours… 0 / ${todo.length}`);
 for(const p of todo){
 if(!auto||DB.current!==catName)break;
+let tries=0;
+while(auto&&DB.current===catName&&tries<3){
 try{
 await fetchCandidates(p);
 const c=p.candidates.find(x=>x.image);
 if(c){pick(p,c);okCount++;}
-errs=0;
+errs=0;break;
 }catch(e){
-errs++;lastErr=e.message;
-if(errs>=3)break; /* probablement quota/clé invalide : on s'arrête */
+tries++;errs++;lastErr=e.message;
+if(errs>=12)break;
+const wait=Math.min(60,15*tries); /* pause automatique puis nouvel essai */
+for(let s=wait;s>0&&auto;s--){setAutoUI(true,done,todo.length,`⏳ Pause automatique (${s}s) puis nouvel essai — ${lastErr}`);await sleep(1000);}
 }
+}
+if(errs>=12||!auto)break;
 done++;
 setAutoUI(true,done,todo.length,`Recherche en cours… ${done} / ${todo.length} (${okCount} images trouvées)`);
 if(DB.current===catName){stats();if(done%4===0)render();}
@@ -429,7 +451,7 @@ auto=false;
 if(DB.current===catName)render();
 save();
 let msg=`✓ Terminé : ${okCount} image(s) choisie(s) automatiquement sur ${todo.length}. Vous pouvez changer n’importe quelle image.`;
-if(errs>=3)msg=`⚠️ Arrêté après plusieurs erreurs (${lastErr}). ${okCount} image(s) trouvée(s). Les données sont sauvegardées.`;
+if(errs>=12)msg=`⚠️ Arrêté après trop d’erreurs consécutives (${lastErr}). ${okCount} image(s) trouvée(s). Les données sont sauvegardées.`;
 else if(stopped&&done<todo.length)msg=`⏹ Arrêté : ${okCount} image(s) choisie(s) sur ${done} produit(s) traités. Vous pouvez reprendre quand vous voulez.`;
 setAutoUI(false,0,0,msg);
 });
