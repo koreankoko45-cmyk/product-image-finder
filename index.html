@@ -1,494 +1,76 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Product Image Finder</title>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<meta charset="UTF-8">
+<title>Image Finder - Privé</title>
 <style>
-:root{--purple:#7653c7;--deep:#56399e;--bg:#f6f4fb;--ink:#29243a;--muted:#777187;--line:#e9e4f1;--white:#fff}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,Arial,sans-serif}
-header{background:linear-gradient(120deg,#56399e,#9274df);color:#fff;padding:28px max(20px,calc((100% - 1160px)/2))}
-.brand{font-size:12px;font-weight:800;letter-spacing:2px;opacity:.9}
-.hero{display:flex;justify-content:space-between;align-items:center;gap:18px}
-.hero h1{font-size:30px;margin:13px 0 7px}
-.hero p{margin:0;color:#eee8ff;line-height:1.5}
-.version{border:1px solid #ffffff66;border-radius:30px;padding:9px 13px;font-size:12px;white-space:nowrap}
-main{max-width:1160px;margin:26px auto;padding:0 20px 50px}
-.panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:21px;margin-bottom:18px;box-shadow:0 5px 18px #38236b08}
-h2{font-size:17px;margin:0 0 15px}
-.muted{color:var(--muted);font-size:12px;line-height:1.5}
-.upload{display:block;border:2px dashed #cbbce9;background:#fbfaff;border-radius:12px;padding:27px;text-align:center;cursor:pointer}
-.upload:hover{border-color:var(--purple);background:#f7f3ff}
-.upload input{display:none}
-.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}
-.btn{border:0;border-radius:9px;padding:10px 14px;background:var(--purple);color:#fff;font-weight:700;cursor:pointer}
-.btn:hover{background:var(--deep)}
-.btn.light{background:#eee9f8;color:#56399e}
-.btn.danger{background:#fde8e8;color:#b42318}
-.btn.green{background:#1f8a5b}
-.btn.green:hover{background:#17724b}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-.field{padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);max-width:100%}
-.notice{padding:11px 13px;border-radius:9px;background:#f3effb;color:#5e478e;font-size:12px;line-height:1.55}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:15px 0}
-.stat{background:#faf9fd;border:1px solid var(--line);padding:13px;border-radius:11px}
-.stat b{display:block;font-size:22px;color:var(--purple)}
-.stat span{font-size:12px;color:var(--muted)}
-.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-.products{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:14px;margin-top:16px}
-.card{border:1px solid var(--line);border-radius:13px;overflow:hidden;background:white;min-width:0}
-.photo{height:180px;background:#f1eef7;display:flex;align-items:center;justify-content:center;overflow:hidden}
-.photo img{width:100%;height:100%;object-fit:contain;background:white}
-.placeholder{color:#a29bb2;font-size:13px;text-align:center;padding:20px}
-.cardbody{padding:13px}
-.name{font-weight:700;font-size:14px;line-height:1.4;min-height:38px}
-.price{color:var(--purple);font-weight:800;margin:7px 0 10px}
-.actions{display:flex;gap:7px;flex-wrap:wrap}
-.actions .btn{font-size:11px;padding:8px 9px}
-.status{font-size:11px;color:var(--muted);margin-top:9px}
-.results{display:flex;gap:8px;overflow-x:auto;padding:8px 0 2px}
-.candidate{min-width:108px;width:108px;border:2px solid transparent;border-radius:9px;overflow:hidden;background:#f5f3f9;cursor:pointer;padding:0}
-.candidate.selected{border-color:var(--purple)}
-.candidate img{width:104px;height:90px;object-fit:contain;background:#fff}
-.candidate small{display:block;padding:5px;font-size:10px;color:#625d70;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hidden{display:none!important}
-.error{color:#b42318}
-.footer{text-align:center;color:#928da0;font-size:11px;padding:15px}
-.tag{display:inline-block;background:#f0eafa;color:#6041a8;padding:5px 8px;border-radius:20px;font-size:11px}
-.savebar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 14px;padding:11px 13px;border-radius:10px;background:#f0faf4;border:1px solid #cfe9d9}
-.savebar .btn{font-size:12px;padding:8px 11px}
-#saveState{font-size:12px;color:#256b43;font-weight:600;margin-right:auto}
-#saveState.warn{color:#b42318}
-.autobar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 14px;padding:12px 13px;border-radius:10px;background:#fff8e8;border:1px solid #f1deb0}
-.autobar .btn{font-size:13px}
-#autoInfo{font-size:12px;color:#7a5a00;font-weight:600}
-.progress{flex:1;min-width:140px;height:8px;background:#f1e6c4;border-radius:8px;overflow:hidden}
-.progress i{display:block;height:100%;width:0;background:#e0a100;transition:width .2s}
-.catrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.catrow select{min-width:200px;font-weight:700}
-.catrow .btn{font-size:12px;padding:9px 11px}
-@media(max-width:600px){.hero{align-items:flex-start;flex-direction:column}.hero h1{font-size:24px}.stats{gap:6px}.stat{padding:10px}.stat b{font-size:18px}}
+:root{--purple:#7653c7}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter, sans-serif; background:#f8f7ff; display:flex; height:100vh}
+aside{width:320px; background:white; border-right:1px solid #eee; padding:20px; overflow-y:auto}
+main{flex:1; padding:20px; overflow-y:auto}
+.brand{font-weight:800; color:var(--purple); font-size:22px; margin-bottom:20px}
+.cat{border:1px solid #e5e5e5; padding:12px; border-radius:12px; margin-bottom:10px; background:#fff}
+.cat b{display:block}
+.cat button{background:var(--purple); color:white; border:0; padding:6px 12px; border-radius:8px; cursor:pointer; margin-top:6px}
+.product-card{background:white; padding:20px; border-radius:16px; box-shadow:0 4px 20px rgba(0,0,0,0.05)}
+.imgs{display:flex; gap:15px; margin-top:15px}
+.imgs img{width:200px; height:200px; object-fit:contain; border:2px solid #eee; border-radius:12px; cursor:pointer}
+.imgs img.selected{border-color:var(--purple)}
 </style>
 </head>
 <body>
-<header>
-<div class="brand">PRODUCT IMAGE FINDER</div>
-<div class="hero">
-<div>
-<h1>Trouvez les images de vos produits</h1>
-<p>Une catégorie = un travail sauvegardé. Les images sont trouvées automatiquement, vous pouvez toujours les changer.</p>
-</div>
-<div class="version">VERSION 1.2</div>
-</div>
-</header>
+<aside>
+  <div class="brand">Image Finder Privé</div>
+  <div id="cats">Chargement...</div>
+  <hr style="margin:15px 0">
+  <button onclick="location.href='/api/export'" style="width:100%; padding:12px; background:#111; color:white; border-radius:10px; border:0">📥 Exporter Excel avec liens</button>
+  <p style="font-size:12px; margin-top:10px; color:#666">رابط واحد - تقدري تخدمي نتي وشخص اخر فنفس الوقت</p>
+</aside>
 <main>
-
-<section class="panel">
-<h2>00 — Catégorie de travail</h2>
-<div class="catrow">
-<select id="catSel" class="field"></select>
-<button id="catNew" class="btn">➕ Nouvelle catégorie</button>
-<button id="catRename" class="btn light">✏️ Renommer</button>
-<button id="catDel" class="btn danger">🗑️ Supprimer</button>
-</div>
-<div class="muted" style="margin-top:10px">Chaque catégorie garde ses propres produits et ses propres images. Changez de catégorie à tout moment : rien n’est perdu.</div>
-</section>
-
-<section class="panel">
-<h2>01 — Importer un fichier Excel dans la catégorie « <span id="catName"></span> »</h2>
-<label class="upload" for="file">
-<div style="font-size:32px">📄</div>
-<strong>Choisir un fichier Excel</strong>
-<div class="muted">Formats acceptés : .xlsx, .xls, .csv</div>
-<input id="file" type="file" accept=".xlsx,.xls,.csv">
-</label>
-<div class="row">
-<label class="muted">Colonne du nom</label>
-<select id="nameCol" class="field" disabled></select>
-<label class="muted">Colonne du prix</label>
-<select id="priceCol" class="field" disabled></select>
-<button id="loadBtn" class="btn" disabled>Importer les produits</button>
-</div>
-<div id="fileInfo" class="muted" style="margin-top:10px">Choisissez un fichier pour commencer.</div>
-<div class="row">
-<label class="btn light" for="backupFile" style="display:inline-block">📂 Charger une sauvegarde (.json)</label>
-<input id="backupFile" type="file" accept=".json,application/json" class="hidden">
-</div>
-</section>
-
-<section id="workspace" class="panel hidden">
-<div class="toolbar">
-<h2>02 — Catalogue : <span id="catName2"></span></h2>
-<div class="row" style="margin:0">
-<input id="filter" class="field" placeholder="Rechercher un produit…">
-<button id="export" class="btn" disabled>↓ Exporter cette catégorie</button>
-<button id="exportAll" class="btn light" disabled>↓ Exporter toutes les catégories</button>
-</div>
-</div>
-
-<div class="savebar">
-<span id="saveState">Sauvegarde automatique activée</span>
-<button id="backupBtn" class="btn light">💾 Télécharger la sauvegarde (.json)</button>
-<button id="clearBtn" class="btn danger">🗑️ Vider cette catégorie</button>
-</div>
-
-<div class="autobar">
-<button id="autoBtn" class="btn green">⚡ Recherche automatique des images</button>
-<span id="autoInfo">Trouve et choisit une image pour tous les produits sans image. Vous pourrez la changer ensuite.</span>
-<div class="progress hidden" id="progWrap"><i id="prog"></i></div>
-</div>
-
-<div class="stats">
-<div class="stat"><b id="total">0</b><span>Produits importés</span></div>
-<div class="stat"><b id="found">0</b><span>Images sélectionnées</span></div>
-<div class="stat"><b id="remaining">0</b><span>À compléter</span></div>
-</div>
-<div class="notice" id="apiNotice">La recherche d’images nécessite une clé SerpApi configurée sur le serveur. Les images proposées doivent être vérifiées avant usage commercial. Le fichier Excel est traité localement dans votre navigateur.</div>
-<div id="products" class="products"></div>
-</section>
-<div class="footer">Product Image Finder · Vérifiez les droits d’utilisation des images avant toute publication commerciale.</div>
+  <h1 id="title">اختار مجموعة من اليسار</h1>
+  <div id="product"></div>
+  <div style="margin-top:20px">
+    <button id="prevBtn">⬅️ السابق</button>
+    <button id="nextBtn">التالي ➡️</button>
+    <button id="saveBtn" style="background:var(--purple); color:white; padding:10px 20px; border:0; border-radius:10px">حفظ و المرور للتالي</button>
+  </div>
 </main>
 <script>
-const $=id=>document.getElementById(id);
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const STORE_KEY='product_image_finder_v2';
-const OLD_KEY='product_image_finder_v1';
-
-let sourceRows=[];
-let DB={current:'Général',cats:{'Général':{fileName:'',products:[]}}};
-let products=[];      /* produits de la catégorie courante */
-let auto=false;       /* recherche automatique en cours */
-
-const cur=()=>DB.cats[DB.current];
-function useCurrent(){products=cur().products;}
-
-/* ---------- SAUVEGARDE ---------- */
-function snapshot(){
-const cats={};
-for(const [name,c] of Object.entries(DB.cats)){
-cats[name]={fileName:c.fileName||'',products:c.products.map(p=>({id:p.id,name:p.name,price:p.price,image:p.image,source:p.source,link:p.link}))};
+let categories=[], currentCat=null, products=[], currentIndex=0, selectedImage=null;
+async function loadCats(){
+  const res = await fetch('/api/categories'); categories=await res.json();
+  document.getElementById('cats').innerHTML = categories.map(c=>`
+    <div class="cat"><b>${c.id}</b><small>${c.done}/${c.total}</small>
+    <div style="height:6px; background:#eee; border-radius:4px"><div style="width:${(c.done/c.total)*100}%; height:100%; background:var(--purple)"></div></div>
+    <button onclick="startCat('${c.id}')">Démarrer / Continuer</button></div>`).join('');
 }
-return{app:'product-image-finder',version:2,savedAt:new Date().toISOString(),current:DB.current,cats};
+async function startCat(id){
+  currentCat=id; const res=await fetch(`/api/products?cat=${id}`); products=await res.json();
+  const prog=await fetch('/api/progress').then(r=>r.json());
+  currentIndex = prog[id]?.last ? parseInt(prog[id].last) : 0;
+  showProduct();
 }
-function setSaveState(msg,warn){const el=$('saveState');el.textContent=msg;el.classList.toggle('warn',!!warn);}
-function save(){
-try{
-localStorage.setItem(STORE_KEY,JSON.stringify(snapshot()));
-setSaveState('✓ Sauvegardé automatiquement à '+new Date().toLocaleTimeString('fr-FR'));
-}catch(e){
-setSaveState('⚠️ Sauvegarde automatique impossible — téléchargez la sauvegarde .json',true);
+async function showProduct(){
+  if(!products[currentIndex]) return;
+  const p=products[currentIndex];
+  const name=p.Désignation || p.designation || p.Nom || Object.values(p)[0];
+  document.getElementById('title').innerText=`${currentCat} - ${currentIndex+1}/${products.length} : ${name}`;
+  document.getElementById('product').innerHTML=`<div class="product-card"><h3>${name}</h3><p>جاري البحث عن صور...</p><div id="imgs" class="imgs"></div></div>`;
+  const imgs=await fetch(`/api/search?q=${encodeURIComponent(name)}`).then(r=>r.json());
+  document.getElementById('imgs').innerHTML=imgs.map((url,i)=>`<img src="${url}" onclick="selectImg(this,'${url}')">`).join('');
 }
+function selectImg(el,url){ document.querySelectorAll('.imgs img').forEach(i=>i.classList.remove('selected')); el.classList.add('selected'); selectedImage=url; }
+async function save(){
+  if(!selectedImage) return alert('اختار تصويرة أولا');
+  const name=products[currentIndex].Désignation || Object.values(products[currentIndex])[0];
+  await fetch('/api/save',{method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({cat:currentCat, index:currentIndex, imageUrl:selectedImage, designation:name})});
+  currentIndex++; selectedImage=null; showProduct(); loadCats();
 }
-function normProducts(list){
-return (list||[]).map((p,i)=>({id:i,name:String(p.name??''),price:p.price??'',image:p.image||'',source:p.source||'',link:p.link||'',candidates:[]}));
-}
-/* accepte l'ancien format (v1: un seul catalogue) et le nouveau (v2: catégories) */
-function parseData(d){
-if(!d)return null;
-if(d.cats&&typeof d.cats==='object'){
-const cats={};
-for(const [name,c] of Object.entries(d.cats))cats[name]={fileName:c.fileName||'',products:normProducts(c.products)};
-const names=Object.keys(cats);
-if(!names.length)return null;
-return{current:cats[d.current]?d.current:names[0],cats};
-}
-if(Array.isArray(d.products)){
-return{current:'Général',cats:{'Général':{fileName:d.fileName||'',products:normProducts(d.products)}}};
-}
-return null;
-}
-function restore(){
-try{
-let raw=localStorage.getItem(STORE_KEY);
-if(!raw)raw=localStorage.getItem(OLD_KEY); /* migration depuis la version 1.1 */
-if(!raw)return false;
-const parsed=parseData(JSON.parse(raw));
-if(!parsed)return false;
-DB=parsed;
-return true;
-}catch(e){return false;}
-}
-
-/* ---------- CATÉGORIES ---------- */
-function renderCats(){
-$('catSel').innerHTML=Object.keys(DB.cats).map(n=>`<option value="${esc(n)}"${n===DB.current?' selected':''}>${esc(n)} (${DB.cats[n].products.length})</option>`).join('');
-$('catName').textContent=DB.current;
-$('catName2').textContent=DB.current;
-}
-function switchCat(name){
-if(!DB.cats[name])return;
-if(auto){auto=false;}
-DB.current=name;useCurrent();
-$('filter').value='';
-refreshAll();save();
-}
-function refreshAll(){
-renderCats();
-$('workspace').classList.toggle('hidden',!products.length&&Object.values(DB.cats).every(c=>!c.products.length));
-render();
-const c=cur();
-$('fileInfo').textContent=products.length?((c.fileName?c.fileName+' · ':'')+products.length+' produits dans cette catégorie.'):'Choisissez un fichier pour commencer.';
-}
-$('catSel').addEventListener('change',e=>switchCat(e.target.value));
-$('catNew').addEventListener('click',()=>{
-const n=(prompt('Nom de la nouvelle catégorie (ex : Abat-jour, Lustres, Lampes de table) :')||'').trim();
-if(!n)return;
-if(DB.cats[n]){alert('Cette catégorie existe déjà.');return;}
-DB.cats[n]={fileName:'',products:[]};
-switchCat(n);
-});
-$('catRename').addEventListener('click',()=>{
-const n=(prompt('Nouveau nom pour « '+DB.current+' » :',DB.current)||'').trim();
-if(!n||n===DB.current)return;
-if(DB.cats[n]){alert('Une catégorie porte déjà ce nom.');return;}
-const rebuilt={};
-for(const [k,v] of Object.entries(DB.cats))rebuilt[k===DB.current?n:k]=v;
-DB.cats=rebuilt;DB.current=n;useCurrent();
-refreshAll();save();
-});
-$('catDel').addEventListener('click',()=>{
-const names=Object.keys(DB.cats);
-if(!confirm('Supprimer la catégorie « '+DB.current+' » avec tous ses produits et images ?\n\nAstuce : téléchargez d’abord la sauvegarde .json.'))return;
-if(auto)auto=false;
-delete DB.cats[DB.current];
-if(names.length===1)DB.cats['Général']={fileName:'',products:[]};
-DB.current=Object.keys(DB.cats)[0];
-useCurrent();refreshAll();save();
-});
-
-/* ---------- BACKUP JSON ---------- */
-$('backupBtn').addEventListener('click',()=>{
-const blob=new Blob([JSON.stringify(snapshot(),null,2)],{type:'application/json'});
-const a=document.createElement('a');
-a.href=URL.createObjectURL(blob);
-a.download='Sauvegarde_Produits_'+new Date().toISOString().slice(0,10)+'.json';
-document.body.appendChild(a);a.click();a.remove();
-setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-});
-$('backupFile').addEventListener('change',async e=>{
-const f=e.target.files[0];if(!f)return;
-try{
-const d=JSON.parse(await f.text());
-if(d.app!=='product-image-finder')throw Error('Fichier de sauvegarde invalide.');
-const parsed=parseData(d);
-if(!parsed)throw Error('Fichier de sauvegarde invalide.');
-const hasData=Object.values(DB.cats).some(c=>c.products.length);
-if(hasData&&!confirm('Remplacer TOUTES les catégories actuelles par cette sauvegarde ?')){e.target.value='';return;}
-DB=parsed;useCurrent();refreshAll();save();
-$('fileInfo').textContent='Sauvegarde chargée : '+Object.keys(DB.cats).length+' catégorie(s).';
-}catch(err){
-$('fileInfo').innerHTML='<span class="error">'+esc(err.message)+'</span>';
-}
-e.target.value='';
-});
-$('clearBtn').addEventListener('click',()=>{
-if(!confirm('Vider la catégorie « '+DB.current+' » (produits + images) ? Action définitive.\n\nAstuce : téléchargez d’abord la sauvegarde .json.'))return;
-if(auto)auto=false;
-cur().products=[];cur().fileName='';useCurrent();
-refreshAll();save();
-});
-window.addEventListener('beforeunload',()=>{save();});
-
-/* ---------- STATUT API ---------- */
-async function checkStatus(){
-try{
-const r=await fetch('/api/status');
-const d=await r.json();
-if(!d.configured)$('apiNotice').innerHTML='⚙️ <b>Recherche non configurée.</b> Ajoutez votre clé SerpApi dans le fichier <code>.env</code> du serveur pour activer la recherche d’images. <span class="tag">Excel local activé</span>';
-else $('apiNotice').innerHTML='✓ Service de recherche connecté. Les images choisies automatiquement sont des suggestions : vérifiez-les et changez-les si besoin (bouton « Changer l’image »).';
-}catch(e){
-$('apiNotice').innerHTML='Le serveur de recherche n’est pas joignable. Vérifiez que le site est lancé avec Node.js.';
-}
-}
-
-/* ---------- IMPORT EXCEL ---------- */
-$('file').addEventListener('change',async e=>{
-const f=e.target.files[0];if(!f)return;
-try{
-const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
-sourceRows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
-if(sourceRows.length<2)throw Error('Le fichier ne contient pas assez de lignes.');
-sourceRows.fileName=f.name;
-const headers=sourceRows[0].map((h,i)=>String(h||`Colonne ${i+1}`));
-const opts=headers.map((h,i)=>`<option value="${i}">${esc(h)}</option>`).join('');
-$('nameCol').innerHTML=opts;$('priceCol').innerHTML=opts;
-const ni=headers.findIndex(h=>/produit|désignation|designation|nom|product|article/i.test(h));
-const pi=headers.findIndex(h=>/prix|price|tarif|ttc/i.test(h));
-$('nameCol').value=ni>=0?ni:0;
-$('priceCol').value=pi>=0?pi:Math.min(1,headers.length-1);
-$('nameCol').disabled=$('priceCol').disabled=$('loadBtn').disabled=false;
-$('fileInfo').textContent=`${f.name} · ${sourceRows.length-1} lignes détectées · Feuille : ${wb.SheetNames[0]} → sera importé dans « ${DB.current} »`;
-}catch(err){
-$('fileInfo').innerHTML=`<span class="error">${esc(err.message)}</span>`;
-}
-});
-$('loadBtn').addEventListener('click',()=>{
-if(products.some(p=>p.image)&&!confirm('La catégorie « '+DB.current+' » contient déjà des images sélectionnées. L’import va les remplacer.\n\nContinuer ? (pensez à télécharger la sauvegarde .json avant)'))return;
-const ni=+$('nameCol').value,pi=+$('priceCol').value;
-cur().products=sourceRows.slice(1).filter(r=>String(r[ni]??'').trim()).map((r,i)=>({id:i,name:String(r[ni]).trim(),price:r[pi]??'',image:'',source:'',link:'',candidates:[]}));
-cur().fileName=sourceRows.fileName||'';
-useCurrent();
-refreshAll();save();checkStatus();$('workspace').scrollIntoView({behavior:'smooth'});
-});
-
-/* ---------- AFFICHAGE ---------- */
-function stats(){
-$('total').textContent=products.length;
-$('found').textContent=products.filter(p=>p.image).length;
-$('remaining').textContent=products.filter(p=>!p.image).length;
-$('export').disabled=!products.length;
-$('exportAll').disabled=!Object.values(DB.cats).some(c=>c.products.length);
-}
-function candidatesHTML(p){
-return (p.candidates||[]).map((c,i)=>`<button class="candidate${c.image&&c.image===p.image?' selected':''}" onclick="chooseImage(${p.id},${i})" title="${esc(c.title)}"><img src="${esc(c.thumbnail)}" alt=""><small>${esc(c.source||c.title)}</small></button>`).join('');
-}
-function render(){
-const q=$('filter').value.toLowerCase();
-$('products').innerHTML=products.filter(p=>p.name.toLowerCase().includes(q)).map(p=>`<article class="card"><div class="photo">${p.image?`<img src="${esc(p.image)}" alt="${esc(p.name)}">`:'<div class="placeholder">🖼️<br>Aucune image sélectionnée</div>'}</div><div class="cardbody"><div class="name">${esc(p.name)}</div><div class="price">${esc(p.price)} ${p.price!==''?'DH':''}</div><div class="actions"><button class="btn" onclick="searchImages(${p.id})">${p.image?'🔄 Changer l’image':'🔎 Chercher une image'}</button><button class="btn light" onclick="manualSearch(${p.id})">Recherche web ↗</button><button class="btn light" onclick="pasteImage(${p.id})">🔗 Coller un lien</button>${p.image?`<button class="btn light" onclick="clearImage(${p.id})">Retirer</button>`:''}</div><div class="status">${p.image?'✓ Image sélectionnée (modifiable)':'En attente de sélection'}</div><div class="results" id="results-${p.id}">${candidatesHTML(p)}</div></div></article>`).join('');
-stats();
-renderCats();
-}
-$('filter').addEventListener('input',render);
-
-async function fetchCandidates(p){
-const r=await fetch('/api/images?q='+encodeURIComponent(p.name));
-const d=await r.json();
-if(!r.ok)throw Error(d.error||'Erreur de recherche');
-p.candidates=d.results||[];
-return p.candidates;
-}
-function pick(p,c){p.image=c.image;p.source=c.source||'';p.link=c.link||'';}
-
-/* recherche manuelle d'un produit : choisit automatiquement la 1ère image si le produit n'en a pas */
-async function searchImages(id){
-const p=products.find(x=>x.id===id),box=$('results-'+id);
-if(!p)return;
-if(box)box.innerHTML='<span class="muted">Recherche en cours…</span>';
-try{
-await fetchCandidates(p);
-if(!p.candidates.length){if(box)box.innerHTML='<span class="muted">Aucun résultat trouvé. Essayez une recherche plus précise.</span>';return;}
-if(!p.image){const c=p.candidates.find(x=>x.image);if(c){pick(p,c);save();}}
-render();
-}catch(e){
-if(box)box.innerHTML=`<span class="muted error">${esc(e.message)}</span>`;
-}
-}
-function chooseImage(id,i){
-const p=products.find(x=>x.id===id),c=p.candidates[i];
-if(!c)return;
-pick(p,c);render();save();
-}
-function clearImage(id){
-const p=products.find(x=>x.id===id);
-p.image=p.source=p.link='';render();save();
-}
-/* Image choisie à la main : l'utilisateur colle l'adresse de l'image (aucune recherche SerpApi nécessaire) */
-function pasteImage(id){
-const p=products.find(x=>x.id===id);
-if(!p)return;
-const url=(prompt('Collez l’adresse de l’image pour :\n« '+p.name+' »\n\n(Dans Google Images : clic droit sur l’image → « Copier l’adresse de l’image »)',p.image||'')||'').trim();
-if(!url)return;
-if(!/^https?:\/\//i.test(url)&&!/^data:image\//i.test(url)){
-alert('Lien invalide. Il doit commencer par http:// ou https://');
-return;
-}
-const apply=()=>{p.image=url;p.source='Lien manuel';p.link='';render();save();};
-const test=new Image();
-test.onload=apply;
-test.onerror=()=>{if(confirm('Ce lien ne semble pas être une image directe (la page n’a pas pu l’afficher).\n\nL’utiliser quand même ?'))apply();};
-test.src=url;
-}
-function manualSearch(id){
-const p=products.find(x=>x.id===id);
-window.open('https://www.google.com/search?tbm=isch&q='+encodeURIComponent(p.name),'_blank','noopener');
-}
-
-/* ---------- RECHERCHE AUTOMATIQUE (toute la catégorie) ---------- */
-function setAutoUI(running,done,total,msg){
-$('autoBtn').textContent=running?'⏹ Arrêter la recherche automatique':'⚡ Recherche automatique des images';
-$('autoBtn').classList.toggle('danger',running);
-$('autoBtn').classList.toggle('green',!running);
-$('progWrap').classList.toggle('hidden',!running);
-$('prog').style.width=total?Math.round(done/total*100)+'%':'0';
-if(msg)$('autoInfo').textContent=msg;
-}
-$('autoBtn').addEventListener('click',async()=>{
-if(auto){auto=false;return;}
-const catName=DB.current;
-const todo=products.filter(p=>!p.image);
-if(!todo.length){$('autoInfo').textContent='✓ Tous les produits de cette catégorie ont déjà une image.';return;}
-auto=true;
-let done=0,okCount=0,errs=0,lastErr='';
-setAutoUI(true,0,todo.length,`Recherche en cours… 0 / ${todo.length}`);
-for(const p of todo){
-if(!auto||DB.current!==catName)break;
-let tries=0;
-while(auto&&DB.current===catName&&tries<3){
-try{
-await fetchCandidates(p);
-const c=p.candidates.find(x=>x.image);
-if(c){pick(p,c);okCount++;}
-errs=0;break;
-}catch(e){
-tries++;errs++;lastErr=e.message;
-if(errs>=12)break;
-const wait=Math.min(60,15*tries); /* pause automatique puis nouvel essai */
-for(let s=wait;s>0&&auto;s--){setAutoUI(true,done,todo.length,`⏳ Pause automatique (${s}s) puis nouvel essai — ${lastErr}`);await sleep(1000);}
-}
-}
-if(errs>=12||!auto)break;
-done++;
-setAutoUI(true,done,todo.length,`Recherche en cours… ${done} / ${todo.length} (${okCount} images trouvées)`);
-if(DB.current===catName){stats();if(done%4===0)render();}
-save();
-await sleep(350);
-}
-const stopped=!auto;
-auto=false;
-if(DB.current===catName)render();
-save();
-let msg=`✓ Terminé : ${okCount} image(s) choisie(s) automatiquement sur ${todo.length}. Vous pouvez changer n’importe quelle image.`;
-if(errs>=12)msg=`⚠️ Arrêté après trop d’erreurs consécutives (${lastErr}). ${okCount} image(s) trouvée(s). Les données sont sauvegardées.`;
-else if(stopped&&done<todo.length)msg=`⏹ Arrêté : ${okCount} image(s) choisie(s) sur ${done} produit(s) traités. Vous pouvez reprendre quand vous voulez.`;
-setAutoUI(false,0,0,msg);
-});
-
-/* ---------- EXPORT EXCEL ---------- */
-const rowsOf=list=>[['Nom du produit','Prix','URL de l’image','Source','Lien source'],...list.map(p=>[p.name,p.price,p.image,p.source,p.link])];
-function makeSheet(list){
-const ws=XLSX.utils.aoa_to_sheet(rowsOf(list));
-ws['!cols']=[{wch:45},{wch:16},{wch:75},{wch:35},{wch:75}];
-return ws;
-}
-const safeName=s=>String(s).replace(/[\\\/\?\*\[\]:]/g,' ').trim().slice(0,31)||'Catégorie';
-$('export').addEventListener('click',()=>{
-const wb=XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(wb,makeSheet(products),safeName(DB.current));
-XLSX.writeFile(wb,'Catalogue_'+safeName(DB.current).replace(/\s+/g,'_')+'.xlsx');
-});
-$('exportAll').addEventListener('click',()=>{
-const wb=XLSX.utils.book_new(),used=new Set();
-for(const [name,c] of Object.entries(DB.cats)){
-if(!c.products.length)continue;
-let s=safeName(name),k=2;
-while(used.has(s.toLowerCase()))s=safeName(name).slice(0,28)+' '+(k++);
-used.add(s.toLowerCase());
-XLSX.utils.book_append_sheet(wb,makeSheet(c.products),s);
-}
-XLSX.writeFile(wb,'Catalogue_Toutes_Categories.xlsx');
-});
-
-/* ---------- DÉMARRAGE ---------- */
-restore();
-useCurrent();
-refreshAll();
-if(products.length||Object.values(DB.cats).some(c=>c.products.length)){
-setSaveState('✓ Données restaurées ('+Object.keys(DB.cats).length+' catégorie(s))');
-}
-checkStatus();
+document.getElementById('saveBtn').onclick=save;
+document.getElementById('nextBtn').onclick=()=>{currentIndex++; showProduct()};
+document.getElementById('prevBtn').onclick=()=>{if(currentIndex>0) currentIndex--; showProduct()};
+loadCats();
 </script>
 </body>
 </html>
